@@ -2,9 +2,9 @@
 ###
  # @Author: Vincent Young
  # @Date: 2022-07-01 15:29:23
- # @LastEditors: Vincent Young
+ # @LastEditors: lbg43
  # @LastEditTime: 2022-07-30 19:26:45
- # @FilePath: /MTProxy/mtproxy.sh
+ # @FilePath: /MTProxy-/mtproxy.sh
  # @Telegram: https://t.me/missuo
  # 
  # Copyright © 2022 by Vincent, All Rights Reserved. 
@@ -56,7 +56,7 @@ download_file(){
 
 configure_mtg(){
     echo -e "Configuring mtg..."
-    wget -N --no-check-certificate -O /etc/mtg.toml https://raw.githubusercontent.com/missuo/MTProxy/main/mtg.toml
+    wget -N --no-check-certificate -O /etc/mtg.toml https://raw.githubusercontent.com/lbg43/MTProxy-/main/mtg.toml
     
     echo ""
     read -p "Please enter a spoofed domain (default itunes.apple.com): " domain
@@ -78,7 +78,7 @@ configure_mtg(){
 
 configure_systemctl(){
     echo -e "Configuring systemctl..."
-    wget -N --no-check-certificate -O /etc/systemd/system/mtg.service https://raw.githubusercontent.com/missuo/MTProxy/main/mtg.service
+    wget -N --no-check-certificate -O /etc/systemd/system/mtg.service https://raw.githubusercontent.com/lbg43/MTProxy-/main/mtg.service
     systemctl enable mtg
     systemctl start mtg
     echo "mtg configured successfully, start to configure firewall..."
@@ -127,7 +127,7 @@ update_mtg(){
 start_menu() {
     clear
     echo -e "  MTProxy v2 One-Click Installation
----- by Vincent | github.com/missuo/MTProxy ----
+---- by lbg43 | github.com/lbg43/MTProxy- ----
  ${green} 1.${plain} Install MTProxy
  ${green} 2.${plain} Uninstall MTProxy
 ————————————
@@ -189,4 +189,4 @@ start_menu() {
         ;;
     esac
 }
-start_menu
+start_menu 
