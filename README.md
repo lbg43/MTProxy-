@@ -1,53 +1,47 @@
 <!--
  * @Author: Vincent Young
  * @Date: 2022-07-01 15:29:23
- * @LastEditors: Vincent Young
+ * @LastEditors: lbg43
  * @LastEditTime: 2022-07-30 19:28:49
- * @FilePath: /MTProxy/README.md
+ * @FilePath: /MTProxy-/README.md
  * @Telegram: https://t.me/missuo
  * 
  * Copyright © 2022 by Vincent, All Rights Reserved. 
 -->
 # MTProxy
-Highly-opinionated (ex-bullshit-free) MTPROTO proxy for [Telegram](https://telegram.org).
+用于[Telegram](https://telegram.org)的高度专业的（前"无废话"的）MTPROTO代理。
 
-## Intro
-**If you have used MTProxy before, you must be using Version 1. At present, the scripts on the Internet are basically Version 1. And my script uses the new Version 2.**
+## 简介
+**如果您以前使用过MTProxy，那么您使用的一定是Version 1。目前，互联网上的脚本基本上都是Version 1。而我的脚本使用了新的Version 2。**
 
-### Differences between v1 and v2
-- Configuration file incompatibility
-- v2 completely removes TAG
-- FakeTLS encryption is used in v2
+### Version 1和Version 2的区别
+- 配置文件不兼容
+- Version 2完全移除了TAG
+- Version 2使用FakeTLS加密
 
-### Updates
-#### July 30th, 2022
-- Support for modifying the listening port
-- Support for modifying secret
-- Support for updating to latest version of MTProxy
+### 更新日志
+#### 2022年7月30日
+- 支持修改监听端口
+- 支持修改密钥
+- 支持更新到最新版本的MTProxy
 
-#### July 1st, 2022
-- Add subscription config
-- Add subscription link
+#### 2022年7月1日
+- 添加订阅配置
+- 添加订阅链接
 
-## Supportability
+## 支持平台
 - X86_64
 - ARM_64
 
-## Installation
-**This script uses the latest release of [9seconds/mtg](https://github.com/9seconds/mtg) by default**
+## 安装方法
+**此脚本默认使用[9seconds/mtg](https://github.com/9seconds/mtg)的最新发布版本**
 ~~~shell
-bash <(curl -Ls https://ssa.sx/mtg)
-~~~
-**Due to the CDN cache, jsdelivr link may not be the latest.**
-~~~shell
-bash <(curl -Ls https://cdn.jsdelivr.net/gh/missuo/MTProxy/mtproxy.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/lbg43/MTProxy-/main/mtproxy.sh)
 ~~~
 
-## Open Source Used
+## 使用的开源项目
 [9seconds/mtg](https://github.com/9seconds/mtg)
 
-## Author
+## 作者
 
-**MTProxy** © [Vincent Young](https://github.com/missuo), Released under the [MIT](./LICENSE) License.<br>
-
-
+**MTProxy** © [Vincent Young](https://github.com/missuo)，由[lbg43](https://github.com/lbg43)分支维护，基于[MIT](./LICENSE)许可证发布。<br> 
