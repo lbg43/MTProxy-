@@ -93,15 +93,12 @@ configure_systemctl(){
     # mtg_config=$(mtg access /etc/mtg.toml)
     public_ip=$(curl -s ipv4.ip.sb)
     
-    # 生成包含服务器信息的secret
-    full_secret=$(mtg generate-secret --hex $domain $public_ip)
+    # 构建完整的链接（需要包含服务器地址和端口，否则客户端无法连接）
+    subscription_config="tg://proxy?server=${public_ip}&port=${port}&secret=${secret}"
+    subscription_link="https://t.me/proxy?server=${public_ip}&port=${port}&secret=${secret}"
     
-    # 使用包含服务器信息的secret创建简化链接
-    simple_config="tg://proxy?secret=${full_secret}"
-    simple_link="https://t.me/proxy?secret=${full_secret}"
-    
-    echo -e "${simple_config}"
-    echo -e "${simple_link}"
+    echo -e "${subscription_config}"
+    echo -e "${subscription_link}"
 }
 
 change_port(){
