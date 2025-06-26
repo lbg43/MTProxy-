@@ -92,8 +92,11 @@ configure_systemctl(){
     public_ip=$(curl -s ipv4.ip.sb)
     subscription_config="tg://proxy?server=${public_ip}&port=${port}&secret=${secret}"
     subscription_link="https://t.me/proxy?server=${public_ip}&port=${port}&secret=${secret}"
-    echo -e "${subscription_config}"
-    echo -e "${subscription_link}"
+    # 不显示服务器IP地址和端口的链接形式
+    masked_config="tg://proxy?secret=${secret}"
+    masked_link="https://t.me/proxy?secret=${secret}"
+    echo -e "${masked_config}"
+    echo -e "${masked_link}"
 }
 
 change_port(){
