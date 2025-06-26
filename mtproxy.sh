@@ -66,6 +66,7 @@ configure_mtg(){
     read -p "Enter the port to be listened to (default 8443):" port
 	[ -z "${port}" ] && port="8443"
 
+    # 生成包含服务器信息的secret
     secret=$(mtg generate-secret --hex $domain)
     
     echo "Waiting configuration..."
@@ -91,13 +92,16 @@ configure_systemctl(){
     # echo "mtg configuration:"
     # mtg_config=$(mtg access /etc/mtg.toml)
     public_ip=$(curl -s ipv4.ip.sb)
-    subscription_config="tg://proxy?server=${public_ip}&port=${port}&secret=${secret}"
-    subscription_link="https://t.me/proxy?server=${public_ip}&port=${port}&secret=${secret}"
-    # 不显示服务器IP地址和端口的链接形式
-    masked_config="tg://proxy?secret=${secret}"
-    masked_link="https://t.me/proxy?secret=${secret}"
-    echo -e "${masked_config}"
-    echo -e "${masked_link}"
+    
+    # 生成包含服务器信息的secret
+    full_secret=$(mtg generate-secret --hex $domain $public_ip)
+    
+    # 使用包含服务器信息的secret创建简化链接
+    simple_config="tg://proxy?secret=${full_secret}"
+    simple_link="https://t.me/proxy?secret=${full_secret}"
+    
+    echo -e "${simple_config}"
+    echo -e "${simple_link}"
 }
 
 change_port(){
