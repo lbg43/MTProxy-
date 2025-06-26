@@ -72,6 +72,7 @@ configure_mtg(){
 
     sed -i "s/secret.*/secret = \"${secret}\"/g" /etc/mtg.toml
     sed -i "s/bind-to.*/bind-to = \"0.0.0.0:${port}\"/g" /etc/mtg.toml
+    sed -i "s/name.*/name = \"MTPROTO\"/g" /etc/mtg.toml
 
     echo "mtg configured successfully, start to configure systemctl..."
 }
