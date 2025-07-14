@@ -108,8 +108,6 @@ configure_mtg(){
     cat > ${instance_dir}/mtg.toml <<EOF
 secret = "${secret}"
 bind-to = "0.0.0.0:${port}"
-name = "MTPROTO"
-doh-ip = "8.8.8.8"
 EOF
 
     echo "mtg instance '${instance_name}' configured successfully, start to configure systemctl..."
@@ -137,7 +135,7 @@ Documentation=https://github.com/lbg43/MTProxy-
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/mtg run ${instance_dir}/mtg.toml
+ExecStart=/usr/bin/mtg run --doh-ip 8.8.8.8 ${instance_dir}/mtg.toml
 Restart=always
 RestartSec=3
 DynamicUser=true
