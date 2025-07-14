@@ -104,9 +104,13 @@ configure_mtg(){
     
     echo "Waiting configuration..."
 
-    sed -i "s/secret.*/secret = \"${secret}\"/g" ${instance_dir}/mtg.toml
-    sed -i "s/bind-to.*/bind-to = \"0.0.0.0:${port}\"/g" ${instance_dir}/mtg.toml
-    sed -i "s/name.*/name = \"MTPROTO-${instance_name}\"/g" ${instance_dir}/mtg.toml
+    # Create the config file with the proper format
+    cat > ${instance_dir}/mtg.toml <<EOF
+secret = "${secret}"
+bind-to = "0.0.0.0:${port}"
+name = "MTPROTO"
+doh-ip = "8.8.8.8"
+EOF
 
     echo "mtg instance '${instance_name}' configured successfully, start to configure systemctl..."
     
