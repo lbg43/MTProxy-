@@ -22,6 +22,11 @@ plain='\033[0m'
 # Make sure run with root
 [[ $EUID -ne 0 ]] && echo -e "[${red}Error${plain}]Please run this script with ROOT!" && exit 1
 
+# Base directory for MTProxy instances
+INSTANCES_DIR="/etc/mtproxy"
+# Default instance name
+DEFAULT_INSTANCE="default"
+
 download_file(){
 	echo "Checking System..."
 
@@ -54,9 +59,37 @@ download_file(){
     echo -e "mtg-${version}-linux-${bit}.tar.gz installed successfully, start to configure..."
 }
 
+# Create instance directory structure
+setup_instance_dir() {
+    # Create base directory if it doesn't exist
+    mkdir -p ${INSTANCES_DIR}
+}
+
 configure_mtg(){
-    echo -e "Configuring mtg..."
-    wget -N --no-check-certificate -O /etc/mtg.toml https://raw.githubusercontent.com/lbg43/MTProxy-/main/mtg.toml
+    setup_instance_dir
+    
+    echo ""
+    read -p "Enter instance name (default: default): " instance_name
+    [ -z "${instance_name}" ] && instance_name="${DEFAULT_INSTANCE}"
+    
+    # Create instance directory
+    instance_dir="${INSTANCES_DIR}/${instance_name}"
+    mkdir -p ${instance_dir}
+    
+    # Check if instance already exists
+    if [ -f "${instance_dir}/mtg.toml" ]; then
+        echo -e "${yellow}Instance '${instance_name}' already exists. Do you want to reconfigure it? (y/n)${plain}"
+        read -p "" reconfigure
+        if [[ "${reconfigure}" != "y" && "${reconfigure}" != "Y" ]]; then
+            echo "Configuration aborted."
+            return
+        fi
+    fi
+    
+    echo -e "Configuring mtg instance: ${instance_name}..."
+    
+    # Create config file for this instance
+    cp /etc/mtg.toml ${instance_dir}/mtg.toml 2>/dev/null || wget -N --no-check-certificate -O ${instance_dir}/mtg.toml https://raw.githubusercontent.com/lbg43/MTProxy-/main/mtg.toml
     
     echo ""
     read -p "Please enter a spoofed domain (default itunes.apple.com): " domain
@@ -66,132 +99,362 @@ configure_mtg(){
     read -p "Enter the port to be listened to (default 8443):" port
 	[ -z "${port}" ] && port="8443"
 
-    # 生成包含服务器信息的secret
+    # Generate secret with server information
     secret=$(mtg generate-secret --hex $domain)
     
     echo "Waiting configuration..."
 
-    sed -i "s/secret.*/secret = \"${secret}\"/g" /etc/mtg.toml
-    sed -i "s/bind-to.*/bind-to = \"0.0.0.0:${port}\"/g" /etc/mtg.toml
-    sed -i "s/name.*/name = \"MTPROTO\"/g" /etc/mtg.toml
+    sed -i "s/secret.*/secret = \"${secret}\"/g" ${instance_dir}/mtg.toml
+    sed -i "s/bind-to.*/bind-to = \"0.0.0.0:${port}\"/g" ${instance_dir}/mtg.toml
+    sed -i "s/name.*/name = \"MTPROTO-${instance_name}\"/g" ${instance_dir}/mtg.toml
 
-    echo "mtg configured successfully, start to configure systemctl..."
+    echo "mtg instance '${instance_name}' configured successfully, start to configure systemctl..."
+    
+    # Save instance info for later use
+    echo "${port}" > ${instance_dir}/port
+    echo "${secret}" > ${instance_dir}/secret
+    echo "${domain}" > ${instance_dir}/domain
+    
+    configure_systemctl "${instance_name}"
 }
 
 configure_systemctl(){
-    echo -e "Configuring systemctl..."
-    wget -N --no-check-certificate -O /etc/systemd/system/mtg.service https://raw.githubusercontent.com/lbg43/MTProxy-/main/mtg.service
-    systemctl enable mtg
-    systemctl start mtg
-    echo "mtg configured successfully, start to configure firewall..."
-    systemctl disable firewalld
-    systemctl stop firewalld
-    ufw disable
-    echo "mtg start successfully, enjoy it!"
+    instance_name=$1
+    instance_dir="${INSTANCES_DIR}/${instance_name}"
+    service_name="mtg-${instance_name}"
+    
+    echo -e "Configuring systemctl for instance: ${instance_name}..."
+    
+    # Create systemd service file
+    cat > /etc/systemd/system/${service_name}.service <<EOF
+[Unit]
+Description=mtg - MTProto proxy server (${instance_name})
+Documentation=https://github.com/lbg43/MTProxy-
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/mtg run ${instance_dir}/mtg.toml
+Restart=always
+RestartSec=3
+DynamicUser=true
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target 
+EOF
+
+    systemctl daemon-reload
+    systemctl enable ${service_name}
+    systemctl start ${service_name}
+    
+    echo "mtg instance '${instance_name}' configured successfully, start to configure firewall..."
+    
+    # Firewall configuration (only once)
+    if [ "${instance_name}" = "${DEFAULT_INSTANCE}" ]; then
+        systemctl disable firewalld 2>/dev/null
+        systemctl stop firewalld 2>/dev/null
+        ufw disable 2>/dev/null
+    fi
+    
+    echo "mtg instance '${instance_name}' started successfully, enjoy it!"
     echo ""
-    # echo "mtg configuration:"
-    # mtg_config=$(mtg access /etc/mtg.toml)
+    
+    port=$(cat ${instance_dir}/port)
+    secret=$(cat ${instance_dir}/secret)
     public_ip=$(curl -s ipv4.ip.sb)
     
-    # 构建完整的链接（需要包含服务器地址和端口，否则客户端无法连接）
+    # Build complete links
     subscription_config="tg://proxy?server=${public_ip}&port=${port}&secret=${secret}"
     subscription_link="https://t.me/proxy?server=${public_ip}&port=${port}&secret=${secret}"
     
+    echo -e "Instance: ${instance_name}"
+    echo -e "Port: ${port}"
     echo -e "${subscription_config}"
     echo -e "${subscription_link}"
 }
 
+list_instances() {
+    echo -e "${green}MTProxy Instances:${plain}"
+    echo "-------------------------"
+    
+    if [ ! -d "${INSTANCES_DIR}" ] || [ -z "$(ls -A ${INSTANCES_DIR} 2>/dev/null)" ]; then
+        echo -e "${yellow}No instances found.${plain}"
+        return
+    fi
+    
+    for instance in $(ls ${INSTANCES_DIR}); do
+        instance_dir="${INSTANCES_DIR}/${instance}"
+        if [ -f "${instance_dir}/mtg.toml" ]; then
+            port=$(cat ${instance_dir}/port 2>/dev/null || echo "unknown")
+            status=$(systemctl is-active mtg-${instance} 2>/dev/null || echo "unknown")
+            
+            if [ "${status}" = "active" ]; then
+                status_color="${green}${status}${plain}"
+            else
+                status_color="${red}${status}${plain}"
+            fi
+            
+            echo -e "Instance: ${instance}, Port: ${port}, Status: ${status_color}"
+        fi
+    done
+    echo "-------------------------"
+}
+
+select_instance() {
+    if [ ! -d "${INSTANCES_DIR}" ] || [ -z "$(ls -A ${INSTANCES_DIR} 2>/dev/null)" ]; then
+        echo -e "${yellow}No instances found.${plain}"
+        return ""
+    fi
+    
+    list_instances
+    
+    echo ""
+    read -p "Enter instance name: " selected_instance
+    
+    if [ ! -d "${INSTANCES_DIR}/${selected_instance}" ]; then
+        echo -e "${red}Instance '${selected_instance}' not found.${plain}"
+        return ""
+    fi
+    
+    echo "${selected_instance}"
+}
+
 change_port(){
-    read -p "Enter the port you want to modify(default 8443):" port
+    instance=$(select_instance)
+    [ -z "${instance}" ] && return
+    
+    instance_dir="${INSTANCES_DIR}/${instance}"
+    service_name="mtg-${instance}"
+    
+    read -p "Enter the port you want to modify for instance '${instance}' (default 8443):" port
 	[ -z "${port}" ] && port="8443"
-    sed -i "s/bind-to.*/bind-to = \"0.0.0.0:${port}\"/g" /etc/mtg.toml
-    echo "Restarting MTProxy..."
-    systemctl restart mtg
-    echo "MTProxy restarted successfully!"
+    
+    sed -i "s/bind-to.*/bind-to = \"0.0.0.0:${port}\"/g" ${instance_dir}/mtg.toml
+    echo "${port}" > ${instance_dir}/port
+    
+    echo "Restarting MTProxy instance '${instance}'..."
+    systemctl restart ${service_name}
+    echo "MTProxy instance '${instance}' restarted successfully!"
+    
+    # Display updated connection info
+    public_ip=$(curl -s ipv4.ip.sb)
+    secret=$(cat ${instance_dir}/secret)
+    
+    subscription_config="tg://proxy?server=${public_ip}&port=${port}&secret=${secret}"
+    subscription_link="https://t.me/proxy?server=${public_ip}&port=${port}&secret=${secret}"
+    
+    echo -e "Updated connection info:"
+    echo -e "${subscription_config}"
+    echo -e "${subscription_link}"
 }
 
 change_secret(){
+    instance=$(select_instance)
+    [ -z "${instance}" ] && return
+    
+    instance_dir="${INSTANCES_DIR}/${instance}"
+    service_name="mtg-${instance}"
+    
     echo -e "Please note that unauthorized modification of Secret may cause MTProxy to not function properly."
-    read -p "Enter the secret you want to modify:" secret
-	[ -z "${secret}" ] && secret="$(mtg generate-secret --hex itunes.apple.com)"
-    sed -i "s/secret.*/secret = \"${secret}\"/g" /etc/mtg.toml
+    read -p "Enter the secret you want to modify for instance '${instance}':" secret
+    
+    domain=$(cat ${instance_dir}/domain 2>/dev/null || echo "itunes.apple.com")
+	[ -z "${secret}" ] && secret="$(mtg generate-secret --hex ${domain})"
+    
+    sed -i "s/secret.*/secret = \"${secret}\"/g" ${instance_dir}/mtg.toml
+    echo "${secret}" > ${instance_dir}/secret
+    
     echo "Secret changed successfully!"
-    echo "Restarting MTProxy..."
-    systemctl restart mtg
-    echo "MTProxy restarted successfully!"
+    echo "Restarting MTProxy instance '${instance}'..."
+    systemctl restart ${service_name}
+    echo "MTProxy instance '${instance}' restarted successfully!"
+    
+    # Display updated connection info
+    public_ip=$(curl -s ipv4.ip.sb)
+    port=$(cat ${instance_dir}/port)
+    
+    subscription_config="tg://proxy?server=${public_ip}&port=${port}&secret=${secret}"
+    subscription_link="https://t.me/proxy?server=${public_ip}&port=${port}&secret=${secret}"
+    
+    echo -e "Updated connection info:"
+    echo -e "${subscription_config}"
+    echo -e "${subscription_link}"
 }
 
 update_mtg(){
     echo -e "Updating mtg..."
     download_file
-    echo "mtg updated successfully, start to restart MTProxy..."
-    systemctl restart mtg
-    echo "MTProxy restarted successfully!"
+    
+    # Restart all instances
+    if [ -d "${INSTANCES_DIR}" ]; then
+        for instance in $(ls ${INSTANCES_DIR}); do
+            if [ -f "${INSTANCES_DIR}/${instance}/mtg.toml" ]; then
+                echo "Restarting MTProxy instance '${instance}'..."
+                systemctl restart mtg-${instance}
+                echo "MTProxy instance '${instance}' restarted successfully!"
+            fi
+        done
+    else
+        echo "No instances found to restart."
+    fi
+    
+    echo "mtg updated successfully!"
+}
+
+start_instance() {
+    instance=$(select_instance)
+    [ -z "${instance}" ] && return
+    
+    service_name="mtg-${instance}"
+    
+    echo "Starting MTProxy instance '${instance}'..."
+    systemctl start ${service_name}
+    systemctl enable ${service_name}
+    echo "MTProxy instance '${instance}' started successfully!"
+}
+
+stop_instance() {
+    instance=$(select_instance)
+    [ -z "${instance}" ] && return
+    
+    service_name="mtg-${instance}"
+    
+    echo "Stopping MTProxy instance '${instance}'..."
+    systemctl stop ${service_name}
+    systemctl disable ${service_name}
+    echo "MTProxy instance '${instance}' stopped successfully!"
+}
+
+restart_instance() {
+    instance=$(select_instance)
+    [ -z "${instance}" ] && return
+    
+    service_name="mtg-${instance}"
+    
+    echo "Restarting MTProxy instance '${instance}'..."
+    systemctl restart ${service_name}
+    echo "MTProxy instance '${instance}' restarted successfully!"
+}
+
+remove_instance() {
+    instance=$(select_instance)
+    [ -z "${instance}" ] && return
+    
+    service_name="mtg-${instance}"
+    instance_dir="${INSTANCES_DIR}/${instance}"
+    
+    echo -e "${yellow}Are you sure you want to remove instance '${instance}'? (y/n)${plain}"
+    read -p "" confirm
+    if [[ "${confirm}" != "y" && "${confirm}" != "Y" ]]; then
+        echo "Removal aborted."
+        return
+    fi
+    
+    echo "Removing MTProxy instance '${instance}'..."
+    systemctl stop ${service_name}
+    systemctl disable ${service_name}
+    rm -f /etc/systemd/system/${service_name}.service
+    systemctl daemon-reload
+    
+    rm -rf ${instance_dir}
+    echo "MTProxy instance '${instance}' removed successfully!"
+}
+
+uninstall_all() {
+    echo -e "${yellow}Are you sure you want to uninstall MTProxy and remove all instances? (y/n)${plain}"
+    read -p "" confirm
+    if [[ "${confirm}" != "y" && "${confirm}" != "Y" ]]; then
+        echo "Uninstall aborted."
+        return
+    fi
+    
+    echo "Uninstalling MTProxy..."
+    
+    # Stop and remove all instances
+    if [ -d "${INSTANCES_DIR}" ]; then
+        for instance in $(ls ${INSTANCES_DIR}); do
+            if [ -f "${INSTANCES_DIR}/${instance}/mtg.toml" ]; then
+                service_name="mtg-${instance}"
+                systemctl stop ${service_name} 2>/dev/null
+                systemctl disable ${service_name} 2>/dev/null
+                rm -f /etc/systemd/system/${service_name}.service
+            fi
+        done
+    fi
+    
+    systemctl daemon-reload
+    
+    # Remove all files
+    rm -rf ${INSTANCES_DIR}
+    rm -rf /usr/bin/mtg
+    rm -rf /etc/mtg.toml
+    rm -rf /etc/systemd/system/mtg.service
+    
+    echo "Uninstall MTProxy successfully!"
 }
 
 start_menu() {
     clear
-    echo -e "  MTProxy v2 One-Click Installation
+    echo -e "  MTProxy v2 Multi-Instance Installation
 ---- by lbg43 | github.com/lbg43/MTProxy- ----
- ${green} 1.${plain} Install MTProxy
- ${green} 2.${plain} Uninstall MTProxy
+ ${green} 1.${plain} Install MTProxy (New Instance)
+ ${green} 2.${plain} Uninstall MTProxy (All Instances)
 ————————————
- ${green} 3.${plain} Start MTProxy
- ${green} 4.${plain} Stop MTProxy
- ${green} 5.${plain} Restart MTProxy
- ${green} 6.${plain} Change Listen Port
- ${green} 7.${plain} Change Secret
- ${green} 8.${plain} Update MTProxy
+ ${green} 3.${plain} List All Instances
+ ${green} 4.${plain} Start Instance
+ ${green} 5.${plain} Stop Instance
+ ${green} 6.${plain} Restart Instance
+ ${green} 7.${plain} Remove Instance
+————————————
+ ${green} 8.${plain} Change Listen Port
+ ${green} 9.${plain} Change Secret
+ ${green}10.${plain} Update MTProxy
 ————————————
  ${green} 0.${plain} Exit
 ————————————" && echo
 
-	read -e -p " Please enter the number [0-8]: " num
+	read -e -p " Please enter the number [0-10]: " num
 	case "$num" in
     1)
 		download_file
         configure_mtg
-        configure_systemctl
 		;;
     2)
-        echo "Uninstall MTProxy..."
-        systemctl stop mtg
-        systemctl disable mtg
-        rm -rf /usr/bin/mtg
-        rm -rf /etc/mtg.toml
-        rm -rf /etc/systemd/system/mtg.service
-        echo "Uninstall MTProxy successfully!"
+        uninstall_all
         ;;
     3) 
-        echo "Starting MTProxy..."
-        systemctl start mtg
-        systemctl enable mtg
-        echo "MTProxy started successfully!"
+        list_instances
         ;;
     4) 
-        echo "Stopping MTProxy..."
-        systemctl stop mtg
-        systemctl disable mtg
-        echo "MTProxy stopped successfully!"
+        start_instance
         ;;
     5)  
-        echo "Restarting MTProxy..."
-        systemctl restart mtg
-        echo "MTProxy restarted successfully!"
+        stop_instance
         ;;
     6) 
-        change_port
+        restart_instance
         ;;
     7)
-        change_secret
+        remove_instance
         ;;
     8)
+        change_port
+        ;;
+    9)
+        change_secret
+        ;;
+    10)
         update_mtg
         ;;
     0) exit 0
         ;;
-    *) echo -e "${Error} Please enter a number [0-8]: "
+    *) echo -e "${red}Error: Please enter a number [0-10]${plain}"
         ;;
     esac
+    
+    # Return to menu after operation
+    echo ""
+    read -p "Press Enter to continue..." dummy
+    start_menu
 }
 start_menu 
