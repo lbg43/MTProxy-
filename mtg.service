@@ -11,6 +11,8 @@ Environment=MTG_BIND=0.0.0.0:8443
 Environment=MTG_SECRET=
 # 添加TAG配置，隐藏服务器信息
 Environment=MTG_TAG=mtproto
+# 添加TLS伪装域名
+Environment=MTG_CLOAK_HOST=itunes.apple.com
 ExecStart=/usr/bin/mtg run
 Restart=always
 RestartSec=3
@@ -18,4 +20,4 @@ DynamicUser=true
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 
 [Install]
-WantedBy=multi-user.target 
+WantedBy=multi-user.target
