@@ -94,12 +94,20 @@ configure_mtg(){
     read -p "Enter the port to be listened to (default 8443):" port
 	[ -z "${port}" ] && port="8443"
 
-    # Generate secret with server information and ad tag for 1.x version
-    echo "生成密钥，域名: ${domain}，添加adtag: mtproto"
-    # 使用v1.0.12版本的正确命令格式
-    mtg generate-secret --help 2>&1 | grep -i adtag
-    # 不同版本的参数可能不同，尝试常见格式
-    secret=$(mtg generate-secret --adtag=mtproto ${domain} || mtg generate-secret -t mtproto ${domain} || mtg generate-secret ${domain})
+    # 显示帮助信息
+    echo "查看MTG帮助..."
+    mtg generate-secret --help
+    
+    # Generate secret with server information for 1.0.12 version
+    echo "生成密钥，域名: ${domain}"
+    # v1.0.12使用不同的参数格式
+    secret=$(mtg generate-secret tls ${domain})
+    
+    # 检查生成结果
+    echo "生成的secret: ${secret}"
+    
+    # v1.0.12使用tag字段代替adtag
+    # 在环境变量中设置tag来显示为mtproto
     
     echo "Waiting configuration..."
 
@@ -108,6 +116,7 @@ configure_mtg(){
 MTG_DEBUG=false
 MTG_BIND=0.0.0.0:${port}
 MTG_SECRET=${secret}
+MTG_TAG=mtproto
 EOF
 
     echo "mtg instance '${instance_name}' configured successfully, start to configure systemctl..."
@@ -265,7 +274,7 @@ change_secret(){
     
     domain=$(cat ${instance_dir}/domain 2>/dev/null || echo "itunes.apple.com")
     adtag=$(cat ${instance_dir}/adtag 2>/dev/null || echo "mtproto")
-	[ -z "${secret}" ] && secret="$(mtg generate-secret --adtag=${adtag} ${domain} || mtg generate-secret -t ${adtag} ${domain} || mtg generate-secret ${domain})"
+	[ -z "${secret}" ] && secret="$(mtg generate-secret tls ${domain})"
     
     # 更新环境文件中的secret
     sed -i "s/MTG_SECRET=.*/MTG_SECRET=${secret}/g" ${instance_dir}/mtg.env
