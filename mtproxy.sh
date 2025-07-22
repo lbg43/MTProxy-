@@ -40,7 +40,7 @@ download_file(){
     fi
 
     # 使用1.x版本而不是2.x
-    last_version="v1.0.0"
+    last_version="v1.1.2"
     version=$(echo ${last_version} | sed 's/v//g')
     wget -N --no-check-certificate -O mtg-${version}-linux-${bit}.tar.gz https://github.com/9seconds/mtg/releases/download/${last_version}/mtg-${version}-linux-${bit}.tar.gz
     if [[ ! -f "mtg-${version}-linux-${bit}.tar.gz" ]]; then
@@ -94,8 +94,13 @@ configure_mtg(){
     read -p "Enter the port to be listened to (default 8443):" port
 	[ -z "${port}" ] && port="8443"
 
+    # 查看MTG帮助
+    mtg generate-secret --help
+    
     # Generate secret with server information and ad tag for 1.x version
-    secret=$(mtg generate-secret --hex --tag mtproto ${domain})
+    echo "生成密钥，域名: ${domain}"
+    # 尝试不同的命令格式
+    secret=$(mtg generate-secret --hex ${domain})
     
     echo "Waiting configuration..."
 
@@ -261,7 +266,7 @@ change_secret(){
     
     domain=$(cat ${instance_dir}/domain 2>/dev/null || echo "itunes.apple.com")
     adtag=$(cat ${instance_dir}/adtag 2>/dev/null || echo "mtproto")
-	[ -z "${secret}" ] && secret="$(mtg generate-secret --hex --tag ${adtag} ${domain})"
+	[ -z "${secret}" ] && secret="$(mtg generate-secret --hex ${domain})"
     
     # 更新环境文件中的secret
     sed -i "s/MTG_SECRET=.*/MTG_SECRET=${secret}/g" ${instance_dir}/mtg.env
