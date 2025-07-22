@@ -9,23 +9,17 @@
  * Copyright © 2022 by Vincent, All Rights Reserved. 
 -->
 # MTProxy
-用于[Telegram](https://telegram.org)的高度专业的MTPROTO代理，支持隐藏服务器信息。
+用于[Telegram](https://telegram.org)的高度专业的（前"无废话"的）MTPROTO代理。
 
 ## 简介
-**此脚本使用MTG的1.x版本，支持隐藏服务器IP和端口信息。当用户连接到您的代理时，Telegram客户端只会显示"MTPROTO"，而不会显示服务器详细信息。**
+**如果您以前使用过MTProxy，那么您使用的一定是Version 1。目前，互联网上的脚本基本上都是Version 1。而我的脚本使用了新的Version 2。**
 
-### 主要特性
-- 使用MTG 1.x版本，支持adtag功能
-- 在Telegram客户端中隐藏服务器IP和端口
-- 多实例部署支持
-- 简单易用的管理界面
+### Version 1和Version 2的区别
+- 配置文件不兼容
+- Version 2完全移除了TAG
+- Version 2使用FakeTLS加密
 
 ### 更新日志
-#### 2023年更新
-- 使用MTG 1.x版本替代2.x版本
-- 添加隐藏服务器信息功能（在Telegram客户端中仅显示"MTPROTO"）
-- 更新配置文件格式，使用环境变量配置代替toml配置
-
 #### 2025年7月14日
 - 支持多实例部署，可在同一VPS上运行多个代理
 - 实例管理系统，可单独管理每个实例
@@ -40,11 +34,17 @@
 - 添加订阅配置
 - 添加订阅链接
 
+#### 更新
+- 优化MTProxy配置，支持通过name字段尝试自定义Telegram客户端中的代理显示名称
+- 链接格式包含必要的服务器信息以确保正常连接（Telegram协议要求）
+- 注意：代理在Telegram客户端中的显示方式可能因客户端版本和设置而异
+
 ## 支持平台
 - X86_64
 - ARM_64
 
 ## 安装方法
+**此脚本默认使用[9seconds/mtg](https://github.com/9seconds/mtg)的最新发布版本**
 ~~~shell
 bash <(curl -Ls https://raw.githubusercontent.com/lbg43/MTProxy-/main/mtproxy.sh)
 ~~~
@@ -55,7 +55,6 @@ bash <(curl -Ls https://raw.githubusercontent.com/lbg43/MTProxy-/main/mtproxy.sh
 2. 输入实例名称(如: proxy1, proxy2)
 3. 输入域名和端口
 4. 系统会自动生成连接信息
-5. 用户连接后，在Telegram客户端中只会显示"MTPROTO"
 
 ### 管理实例
 - 列出所有实例: 选项 `3`
@@ -70,3 +69,10 @@ bash <(curl -Ls https://raw.githubusercontent.com/lbg43/MTProxy-/main/mtproxy.sh
 
 ### 更新MTProxy
 - 选项 `10` 将更新所有实例
+
+## 使用的开源项目
+[9seconds/mtg](https://github.com/9seconds/mtg)
+
+## 作者
+
+**MTProxy** © [Vincent Young](https://github.com/missuo)，由[lbg43](https://github.com/lbg43)分支维护，基于[MIT](./LICENSE)许可证发布。<br> 
