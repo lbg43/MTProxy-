@@ -73,7 +73,7 @@ configure_mtg(){
     mkdir -p ${instance_dir}
     
     # Check if instance already exists
-    if [ -f "${instance_dir}/mtg.env" ]; then
+    if [ -f "${instance_dir}/config.toml" ]; then
         echo -e "${yellow}Instance '${instance_name}' already exists. Do you want to reconfigure it? (y/n)${plain}"
         read -p "" reconfigure
         if [[ "${reconfigure}" != "y" && "${reconfigure}" != "Y" ]]; then
@@ -83,8 +83,6 @@ configure_mtg(){
     fi
     
     echo -e "Configuring mtg instance: ${instance_name}..."
-    
-    # 1.x版本使用环境变量配置，不使用toml文件
     
     echo ""
     read -p "Please enter a spoofed domain (default itunes.apple.com): " domain
@@ -106,18 +104,13 @@ configure_mtg(){
     # 检查生成结果
     echo "生成的secret: ${secret}"
     
-    # v1.0.12使用tag字段代替adtag
-    # 在环境变量中设置tag来显示为mtproto
-    
     echo "Waiting configuration..."
 
-    # 保存配置到文件供systemd服务使用
-    cat > ${instance_dir}/mtg.env <<EOF
-MTG_DEBUG=false
-MTG_BIND=0.0.0.0:${port}
-MTG_SECRET=${secret}
-MTG_TAG=mtproto
-MTG_CLOAK_HOST=${domain}
+    # 保存配置到TOML文件
+    cat > ${instance_dir}/config.toml <<EOF
+secret = "${secret}"
+bind-to = "0.0.0.0:${port}"
+cloak-host = "${domain}"
 EOF
 
     echo "mtg instance '${instance_name}' configured successfully, start to configure systemctl..."
@@ -138,7 +131,14 @@ configure_systemctl(){
     
     echo -e "Configuring systemctl for instance: ${instance_name}..."
     
-    # Create systemd service file for 1.x version using environment file
+    # 创建config.toml配置文件而不是使用环境变量文件
+    cat > ${instance_dir}/config.toml <<EOF
+secret = "${secret}"
+bind-to = "0.0.0.0:${port}"
+cloak-host = "${domain}"
+EOF
+
+    # 修改systemd服务文件，直接将config.toml作为参数传递
     cat > /etc/systemd/system/${service_name}.service <<EOF
 [Unit]
 Description=mtg - MTProto proxy server (${instance_name})
@@ -146,8 +146,7 @@ Documentation=https://github.com/lbg43/MTProxy-
 After=network.target
 
 [Service]
-EnvironmentFile=${instance_dir}/mtg.env
-ExecStart=/usr/bin/mtg run
+ExecStart=/usr/bin/mtg run ${instance_dir}/config.toml
 Restart=always
 RestartSec=3
 DynamicUser=true
@@ -198,7 +197,7 @@ list_instances() {
     
     for instance in $(ls ${INSTANCES_DIR}); do
         instance_dir="${INSTANCES_DIR}/${instance}"
-        if [ -f "${instance_dir}/mtg.env" ]; then
+        if [ -f "${instance_dir}/config.toml" ]; then
             port=$(cat ${instance_dir}/port 2>/dev/null || echo "unknown")
             status=$(systemctl is-active mtg-${instance} 2>/dev/null || echo "unknown")
             
@@ -230,6 +229,11 @@ select_instance() {
         return ""
     fi
     
+    if [ ! -f "${INSTANCES_DIR}/${selected_instance}/config.toml" ]; then
+        echo -e "${red}Instance '${selected_instance}' configuration not found.${plain}"
+        return ""
+    fi
+    
     echo "${selected_instance}"
 }
 
@@ -243,8 +247,18 @@ change_port(){
     read -p "Enter the port you want to modify for instance '${instance}' (default 8443):" port
 	[ -z "${port}" ] && port="8443"
     
-    # 更新环境文件中的端口
-    sed -i "s/MTG_BIND=.*/MTG_BIND=0.0.0.0:${port}/g" ${instance_dir}/mtg.env
+    # 从config.toml中读取现有值
+    secret=$(grep "secret" ${instance_dir}/config.toml | cut -d '"' -f 2)
+    domain=$(grep "cloak-host" ${instance_dir}/config.toml | cut -d '"' -f 2)
+    
+    # 更新配置文件
+    cat > ${instance_dir}/config.toml <<EOF
+secret = "${secret}"
+bind-to = "0.0.0.0:${port}"
+cloak-host = "${domain}"
+EOF
+
+    # 更新端口记录
     echo "${port}" > ${instance_dir}/port
     
     echo "Restarting MTProxy instance '${instance}'..."
@@ -253,7 +267,6 @@ change_port(){
     
     # Display updated connection info
     public_ip=$(curl -s ipv4.ip.sb)
-    secret=$(cat ${instance_dir}/secret)
     
     subscription_config="tg://proxy?server=${public_ip}&port=${port}&secret=${secret}"
     subscription_link="https://t.me/proxy?server=${public_ip}&port=${port}&secret=${secret}"
@@ -273,12 +286,19 @@ change_secret(){
     echo -e "Please note that unauthorized modification of Secret may cause MTProxy to not function properly."
     read -p "Enter the secret you want to modify for instance '${instance}':" secret
     
-    domain=$(cat ${instance_dir}/domain 2>/dev/null || echo "itunes.apple.com")
-    adtag=$(cat ${instance_dir}/adtag 2>/dev/null || echo "mtproto")
+    # 从config.toml中读取现有值
+    domain=$(grep "cloak-host" ${instance_dir}/config.toml | cut -d '"' -f 2)
+    port=$(grep "bind-to" ${instance_dir}/config.toml | sed 's/.*:\([0-9]*\).*/\1/g')
 	[ -z "${secret}" ] && secret="$(mtg generate-secret tls)"
     
-    # 更新环境文件中的secret
-    sed -i "s/MTG_SECRET=.*/MTG_SECRET=${secret}/g" ${instance_dir}/mtg.env
+    # 更新配置文件
+    cat > ${instance_dir}/config.toml <<EOF
+secret = "${secret}"
+bind-to = "0.0.0.0:${port}"
+cloak-host = "${domain}"
+EOF
+
+    # 更新secret记录
     echo "${secret}" > ${instance_dir}/secret
     
     echo "Secret changed successfully!"
@@ -288,7 +308,6 @@ change_secret(){
     
     # Display updated connection info
     public_ip=$(curl -s ipv4.ip.sb)
-    port=$(cat ${instance_dir}/port)
     
     subscription_config="tg://proxy?server=${public_ip}&port=${port}&secret=${secret}"
     subscription_link="https://t.me/proxy?server=${public_ip}&port=${port}&secret=${secret}"
