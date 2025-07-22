@@ -99,9 +99,9 @@ configure_mtg(){
     mtg generate-secret --help
     
     # Generate secret with server information for 1.0.12 version
-    echo "生成密钥，域名: ${domain}"
-    # v1.0.12使用不同的参数格式
-    secret=$(mtg generate-secret tls ${domain})
+    echo "生成密钥类型: tls"
+    # v1.0.12版本参数格式：generate-secret [type]，不接域名
+    secret=$(mtg generate-secret tls)
     
     # 检查生成结果
     echo "生成的secret: ${secret}"
@@ -117,6 +117,7 @@ MTG_DEBUG=false
 MTG_BIND=0.0.0.0:${port}
 MTG_SECRET=${secret}
 MTG_TAG=mtproto
+MTG_CLOAK_HOST=${domain}
 EOF
 
     echo "mtg instance '${instance_name}' configured successfully, start to configure systemctl..."
@@ -274,7 +275,7 @@ change_secret(){
     
     domain=$(cat ${instance_dir}/domain 2>/dev/null || echo "itunes.apple.com")
     adtag=$(cat ${instance_dir}/adtag 2>/dev/null || echo "mtproto")
-	[ -z "${secret}" ] && secret="$(mtg generate-secret tls ${domain})"
+	[ -z "${secret}" ] && secret="$(mtg generate-secret tls)"
     
     # 更新环境文件中的secret
     sed -i "s/MTG_SECRET=.*/MTG_SECRET=${secret}/g" ${instance_dir}/mtg.env
