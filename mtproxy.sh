@@ -39,8 +39,12 @@ download_file(){
 	    bit="386"
     fi
 
-    # 使用1.x版本而不是2.x
-    last_version="v1.0.12"
+    last_version=$(curl -Ls "https://api.github.com/repos/9seconds/mtg/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    if [[ ! -n "$last_version" ]]; then
+        echo -e "${red}Failure to detect mtg version may be due to exceeding Github API limitations, please try again later."
+        exit 1
+    fi
+    echo -e "Latest version of mtg detected: ${last_version}, start installing..."
     version=$(echo ${last_version} | sed 's/v//g')
     wget -N --no-check-certificate -O mtg-${version}-linux-${bit}.tar.gz https://github.com/9seconds/mtg/releases/download/${last_version}/mtg-${version}-linux-${bit}.tar.gz
     if [[ ! -f "mtg-${version}-linux-${bit}.tar.gz" ]]; then
@@ -73,7 +77,7 @@ configure_mtg(){
     mkdir -p ${instance_dir}
     
     # Check if instance already exists
-    if [ -f "${instance_dir}/config.toml" ]; then
+    if [ -f "${instance_dir}/mtg.toml" ]; then
         echo -e "${yellow}Instance '${instance_name}' already exists. Do you want to reconfigure it? (y/n)${plain}"
         read -p "" reconfigure
         if [[ "${reconfigure}" != "y" && "${reconfigure}" != "Y" ]]; then
@@ -84,6 +88,9 @@ configure_mtg(){
     
     echo -e "Configuring mtg instance: ${instance_name}..."
     
+    # Create config file for this instance
+    cp /etc/mtg.toml ${instance_dir}/mtg.toml 2>/dev/null || wget -N --no-check-certificate -O ${instance_dir}/mtg.toml https://raw.githubusercontent.com/lbg43/MTProxy-/main/mtg.toml
+    
     echo ""
     read -p "Please enter a spoofed domain (default itunes.apple.com): " domain
 	[ -z "${domain}" ] && domain="itunes.apple.com"
@@ -92,26 +99,14 @@ configure_mtg(){
     read -p "Enter the port to be listened to (default 8443):" port
 	[ -z "${port}" ] && port="8443"
 
-    # 显示帮助信息
-    echo "查看MTG帮助..."
-    mtg generate-secret --help
-    
-    # Generate secret with server information for 1.0.12 version
-    echo "生成密钥类型: tls"
-    # v1.0.12版本参数格式：generate-secret [type]，不接域名
-    secret=$(mtg generate-secret tls)
-    
-    # 检查生成结果
-    echo "生成的secret: ${secret}"
+    # Generate secret with server information
+    secret=$(mtg generate-secret --hex $domain)
     
     echo "Waiting configuration..."
 
-    # 保存配置到TOML文件
-    cat > ${instance_dir}/config.toml <<EOF
-secret = "${secret}"
-bind-to = "0.0.0.0:${port}"
-cloak-host = "${domain}"
-EOF
+    sed -i "s/secret.*/secret = \"${secret}\"/g" ${instance_dir}/mtg.toml
+    sed -i "s/bind-to.*/bind-to = \"0.0.0.0:${port}\"/g" ${instance_dir}/mtg.toml
+    sed -i "s/name.*/name = \"MTPROTO-${instance_name}\"/g" ${instance_dir}/mtg.toml
 
     echo "mtg instance '${instance_name}' configured successfully, start to configure systemctl..."
     
@@ -119,7 +114,6 @@ EOF
     echo "${port}" > ${instance_dir}/port
     echo "${secret}" > ${instance_dir}/secret
     echo "${domain}" > ${instance_dir}/domain
-    echo "mtproto" > ${instance_dir}/adtag
     
     configure_systemctl "${instance_name}"
 }
@@ -131,14 +125,7 @@ configure_systemctl(){
     
     echo -e "Configuring systemctl for instance: ${instance_name}..."
     
-    # 创建config.toml配置文件而不是使用环境变量文件
-    cat > ${instance_dir}/config.toml <<EOF
-secret = "${secret}"
-bind-to = "0.0.0.0:${port}"
-cloak-host = "${domain}"
-EOF
-
-    # 修改systemd服务文件，直接将config.toml作为参数传递
+    # Create systemd service file
     cat > /etc/systemd/system/${service_name}.service <<EOF
 [Unit]
 Description=mtg - MTProto proxy server (${instance_name})
@@ -146,7 +133,7 @@ Documentation=https://github.com/lbg43/MTProxy-
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/mtg run ${instance_dir}/config.toml
+ExecStart=/usr/bin/mtg run ${instance_dir}/mtg.toml
 Restart=always
 RestartSec=3
 DynamicUser=true
@@ -197,7 +184,7 @@ list_instances() {
     
     for instance in $(ls ${INSTANCES_DIR}); do
         instance_dir="${INSTANCES_DIR}/${instance}"
-        if [ -f "${instance_dir}/config.toml" ]; then
+        if [ -f "${instance_dir}/mtg.toml" ]; then
             port=$(cat ${instance_dir}/port 2>/dev/null || echo "unknown")
             status=$(systemctl is-active mtg-${instance} 2>/dev/null || echo "unknown")
             
@@ -229,11 +216,6 @@ select_instance() {
         return ""
     fi
     
-    if [ ! -f "${INSTANCES_DIR}/${selected_instance}/config.toml" ]; then
-        echo -e "${red}Instance '${selected_instance}' configuration not found.${plain}"
-        return ""
-    fi
-    
     echo "${selected_instance}"
 }
 
@@ -247,18 +229,7 @@ change_port(){
     read -p "Enter the port you want to modify for instance '${instance}' (default 8443):" port
 	[ -z "${port}" ] && port="8443"
     
-    # 从config.toml中读取现有值
-    secret=$(grep "secret" ${instance_dir}/config.toml | cut -d '"' -f 2)
-    domain=$(grep "cloak-host" ${instance_dir}/config.toml | cut -d '"' -f 2)
-    
-    # 更新配置文件
-    cat > ${instance_dir}/config.toml <<EOF
-secret = "${secret}"
-bind-to = "0.0.0.0:${port}"
-cloak-host = "${domain}"
-EOF
-
-    # 更新端口记录
+    sed -i "s/bind-to.*/bind-to = \"0.0.0.0:${port}\"/g" ${instance_dir}/mtg.toml
     echo "${port}" > ${instance_dir}/port
     
     echo "Restarting MTProxy instance '${instance}'..."
@@ -267,6 +238,7 @@ EOF
     
     # Display updated connection info
     public_ip=$(curl -s ipv4.ip.sb)
+    secret=$(cat ${instance_dir}/secret)
     
     subscription_config="tg://proxy?server=${public_ip}&port=${port}&secret=${secret}"
     subscription_link="https://t.me/proxy?server=${public_ip}&port=${port}&secret=${secret}"
@@ -286,19 +258,10 @@ change_secret(){
     echo -e "Please note that unauthorized modification of Secret may cause MTProxy to not function properly."
     read -p "Enter the secret you want to modify for instance '${instance}':" secret
     
-    # 从config.toml中读取现有值
-    domain=$(grep "cloak-host" ${instance_dir}/config.toml | cut -d '"' -f 2)
-    port=$(grep "bind-to" ${instance_dir}/config.toml | sed 's/.*:\([0-9]*\).*/\1/g')
-	[ -z "${secret}" ] && secret="$(mtg generate-secret tls)"
+    domain=$(cat ${instance_dir}/domain 2>/dev/null || echo "itunes.apple.com")
+	[ -z "${secret}" ] && secret="$(mtg generate-secret --hex ${domain})"
     
-    # 更新配置文件
-    cat > ${instance_dir}/config.toml <<EOF
-secret = "${secret}"
-bind-to = "0.0.0.0:${port}"
-cloak-host = "${domain}"
-EOF
-
-    # 更新secret记录
+    sed -i "s/secret.*/secret = \"${secret}\"/g" ${instance_dir}/mtg.toml
     echo "${secret}" > ${instance_dir}/secret
     
     echo "Secret changed successfully!"
@@ -308,6 +271,7 @@ EOF
     
     # Display updated connection info
     public_ip=$(curl -s ipv4.ip.sb)
+    port=$(cat ${instance_dir}/port)
     
     subscription_config="tg://proxy?server=${public_ip}&port=${port}&secret=${secret}"
     subscription_link="https://t.me/proxy?server=${public_ip}&port=${port}&secret=${secret}"
@@ -324,7 +288,7 @@ update_mtg(){
     # Restart all instances
     if [ -d "${INSTANCES_DIR}" ]; then
         for instance in $(ls ${INSTANCES_DIR}); do
-            if [ -f "${INSTANCES_DIR}/${instance}/mtg.env" ]; then
+            if [ -f "${INSTANCES_DIR}/${instance}/mtg.toml" ]; then
                 echo "Restarting MTProxy instance '${instance}'..."
                 systemctl restart mtg-${instance}
                 echo "MTProxy instance '${instance}' restarted successfully!"
@@ -409,7 +373,7 @@ uninstall_all() {
     # Stop and remove all instances
     if [ -d "${INSTANCES_DIR}" ]; then
         for instance in $(ls ${INSTANCES_DIR}); do
-            if [ -f "${INSTANCES_DIR}/${instance}/mtg.env" ]; then
+            if [ -f "${INSTANCES_DIR}/${instance}/mtg.toml" ]; then
                 service_name="mtg-${instance}"
                 systemctl stop ${service_name} 2>/dev/null
                 systemctl disable ${service_name} 2>/dev/null
@@ -423,13 +387,15 @@ uninstall_all() {
     # Remove all files
     rm -rf ${INSTANCES_DIR}
     rm -rf /usr/bin/mtg
+    rm -rf /etc/mtg.toml
+    rm -rf /etc/systemd/system/mtg.service
     
     echo "Uninstall MTProxy successfully!"
 }
 
 start_menu() {
     clear
-    echo -e "  MTProxy v1 Multi-Instance Installation with Hidden Server Info
+    echo -e "  MTProxy v2 Multi-Instance Installation
 ---- by lbg43 | github.com/lbg43/MTProxy- ----
  ${green} 1.${plain} Install MTProxy (New Instance)
  ${green} 2.${plain} Uninstall MTProxy (All Instances)
