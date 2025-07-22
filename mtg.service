@@ -9,6 +9,8 @@ Environment=MTG_DEBUG=false
 Environment=MTG_BIND=0.0.0.0:8443
 # 添加默认secret，实际会被实例配置覆盖
 Environment=MTG_SECRET=
+# 添加TAG配置，隐藏服务器信息
+Environment=MTG_TAG=mtproto
 ExecStart=/usr/bin/mtg run
 Restart=always
 RestartSec=3
