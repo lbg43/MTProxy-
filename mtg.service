@@ -4,16 +4,8 @@ Documentation=https://github.com/lbg43/MTProxy-
 After=network.target
 
 [Service]
-# 环境变量配置用于1.x版本
-Environment=MTG_DEBUG=false
-Environment=MTG_BIND=0.0.0.0:8443
-# 添加默认secret，实际会被实例配置覆盖
-Environment=MTG_SECRET=
-# 添加TAG配置，隐藏服务器信息
-Environment=MTG_TAG=mtproto
-# 添加TLS伪装域名
-Environment=MTG_CLOAK_HOST=itunes.apple.com
-ExecStart=/usr/bin/mtg run
+# 使用配置文件而非环境变量
+ExecStart=/usr/bin/mtg run /etc/mtproxy/default/config.toml
 Restart=always
 RestartSec=3
 DynamicUser=true
