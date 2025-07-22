@@ -4,7 +4,12 @@ Documentation=https://github.com/lbg43/MTProxy-
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/mtg run /etc/mtg.toml
+# 环境变量配置用于1.x版本
+Environment=MTG_DEBUG=false
+Environment=MTG_BIND=0.0.0.0:8443
+# 添加默认secret，实际会被实例配置覆盖
+Environment=MTG_SECRET=
+ExecStart=/usr/bin/mtg run
 Restart=always
 RestartSec=3
 DynamicUser=true
