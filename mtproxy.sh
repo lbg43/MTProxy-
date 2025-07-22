@@ -97,7 +97,9 @@ configure_mtg(){
     # Generate secret with server information and ad tag for 1.x version
     echo "生成密钥，域名: ${domain}，添加adtag: mtproto"
     # 使用v1.0.12版本的正确命令格式
-    secret=$(mtg generate-secret --hex --adtag mtproto ${domain})
+    mtg generate-secret --help 2>&1 | grep -i adtag
+    # 不同版本的参数可能不同，尝试常见格式
+    secret=$(mtg generate-secret --adtag=mtproto ${domain} || mtg generate-secret -t mtproto ${domain} || mtg generate-secret ${domain})
     
     echo "Waiting configuration..."
 
@@ -263,7 +265,7 @@ change_secret(){
     
     domain=$(cat ${instance_dir}/domain 2>/dev/null || echo "itunes.apple.com")
     adtag=$(cat ${instance_dir}/adtag 2>/dev/null || echo "mtproto")
-	[ -z "${secret}" ] && secret="$(mtg generate-secret --hex --adtag ${adtag} ${domain})"
+	[ -z "${secret}" ] && secret="$(mtg generate-secret --adtag=${adtag} ${domain} || mtg generate-secret -t ${adtag} ${domain} || mtg generate-secret ${domain})"
     
     # 更新环境文件中的secret
     sed -i "s/MTG_SECRET=.*/MTG_SECRET=${secret}/g" ${instance_dir}/mtg.env
