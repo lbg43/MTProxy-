@@ -95,7 +95,14 @@ configure_mtg(){
 	[ -z "${port}" ] && port="8443"
 
     # Generate secret with server information and ad tag for 1.x version
-    secret=$(mtg generate-secret --hex --tag mtproto ${domain})
+    echo "正在为域名 ${domain} 生成secret..."
+    mtg_version=$(mtg --version)
+    echo "MTG版本: ${mtg_version}"
+    
+    # 直接显示命令和结果
+    echo "运行命令: mtg generate-secret --hex ${domain}"
+    secret=$(mtg generate-secret --hex ${domain})
+    echo "生成的secret: ${secret}"
     
     echo "Waiting configuration..."
 
