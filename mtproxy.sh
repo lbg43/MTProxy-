@@ -95,7 +95,7 @@ configure_mtg(){
 	[ -z "${port}" ] && port="8443"
 
     # Generate secret with server information and ad tag for 1.x version
-    secret=$(mtg generate-secret ${domain} --tag mtproto)
+    secret=$(mtg generate-secret --hex --tag mtproto ${domain})
     
     echo "Waiting configuration..."
 
@@ -261,7 +261,7 @@ change_secret(){
     
     domain=$(cat ${instance_dir}/domain 2>/dev/null || echo "itunes.apple.com")
     adtag=$(cat ${instance_dir}/adtag 2>/dev/null || echo "mtproto")
-	[ -z "${secret}" ] && secret="$(mtg generate-secret ${domain} --tag ${adtag})"
+	[ -z "${secret}" ] && secret="$(mtg generate-secret --hex --tag ${adtag} ${domain})"
     
     # 更新环境文件中的secret
     sed -i "s/MTG_SECRET=.*/MTG_SECRET=${secret}/g" ${instance_dir}/mtg.env
